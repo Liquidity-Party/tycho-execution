@@ -8,7 +8,7 @@ use crate::encoding::{
         BalancerV2SwapEncoder, BalancerV3SwapEncoder, BebopSwapEncoder, CurveSwapEncoder,
         ERC4626SwapEncoder, EkuboSwapEncoder, FluidV1SwapEncoder, HashflowSwapEncoder,
         MaverickV2SwapEncoder, RocketpoolSwapEncoder, SlipstreamsSwapEncoder, UniswapV2SwapEncoder,
-        UniswapV3SwapEncoder, UniswapV4SwapEncoder,
+        UniswapV3SwapEncoder, UniswapV4SwapEncoder, LiquidityPartySwapEncoder
     },
     swap_encoder::SwapEncoder,
 };
@@ -90,6 +90,11 @@ impl SwapEncoderBuilder {
                 self.config,
             )?)),
             "vm:balancer_v3" => Ok(Box::new(BalancerV3SwapEncoder::new(
+                self.executor_address,
+                self.chain,
+                self.config,
+            )?)),
+            "vm:liquidityparty" => Ok(Box::new(LiquidityPartySwapEncoder::new(
                 self.executor_address,
                 self.chain,
                 self.config,

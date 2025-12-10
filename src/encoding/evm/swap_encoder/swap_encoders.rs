@@ -1365,6 +1365,91 @@ impl SwapEncoder for ERC4626SwapEncoder {
     }
 }
 
+/// Encodes a swap on a Liquidity Party pool through the given executor address.
+///
+/// # Fields
+/// * `executor_address` - The address of the executor contract that will perform the swap.
+#[derive(Clone)]
+pub struct LiquidityPartySwapEncoder {
+    executor_address: Bytes,
+}
+
+impl LiquidityPartySwapEncoder {
+    fn get_token_indexes(&self, swap: &Swap) -> Result<(Address, u8, u8), EncodingError> {
+        let token_in = bytes_to_address(&swap.token_in)?;
+        let token_out = bytes_to_address(&swap.token_out)?;
+
+        let token_addresses: Result<Vec<Address>, EncodingError> = swap.component.tokens
+            .iter()
+            .map(|t| bytes_to_address(t))
+            .collect();
+
+        let token_addresses = token_addresses?;
+
+        let token_in_idx = token_addresses
+            .iter()
+            .position(|&addr| addr == token_in)
+            .ok_or(EncodingError::FatalError(
+                "Token in not found in pool tokens".to_string(),
+            ))?;
+
+        let token_out_idx = token_addresses
+            .iter()
+            .position(|&addr| addr == token_out)
+            .ok_or(EncodingError::FatalError(
+                "Token out not found in pool tokens".to_string(),
+            ))?;
+
+        println!(
+            "LiqP swap encoder: token_in={}, token_in_idx={}, token_out_idx={}",
+            token_in,
+            token_in_idx,
+            token_out_idx
+        );
+        Ok((token_in, token_in_idx as u8, token_out_idx as u8))
+    }
+}
+
+impl SwapEncoder for LiquidityPartySwapEncoder {
+    fn new(
+        executor_address: Bytes,
+        _chain: Chain,
+        _config: Option<HashMap<String, String>>,
+    ) -> Result<Self, EncodingError> {
+        Ok(Self { executor_address })
+    }
+
+    fn encode_swap(
+        &self,
+        swap: &Swap,
+        encoding_context: &EncodingContext,
+    ) -> Result<Vec<u8>, EncodingError> {
+        let pool_addr = Address::from_str(&swap.component.id)
+            .map_err(|_| EncodingError::FatalError("LiqP swap encoder: invalid component id".to_string()))?;
+
+        let (token_in, token_in_idx, token_out_idx) = self.get_token_indexes(swap)?;
+
+        let args = (
+            pool_addr,
+            token_in,
+            token_in_idx.to_be_bytes(),
+            token_out_idx.to_be_bytes(),
+            bytes_to_address(&encoding_context.receiver)?,
+            (encoding_context.transfer_type as u8).to_be_bytes(),
+        );
+
+        Ok(args.abi_encode_packed())
+    }
+
+    fn executor_address(&self) -> &Bytes {
+        &self.executor_address
+    }
+
+    fn clone_box(&self) -> Box<dyn SwapEncoder> {
+        Box::new(self.clone())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -3016,6 +3101,60 @@ mod tests {
                 ))
                 .to_lowercase()
             );
+        }
+    }
+
+    mod liquidityparty {
+        use super::*;
+        use crate::encoding::models::SwapBuilder;
+        #[test]
+        fn test_encode_liquidityparty() {
+            let liqp_pool = ProtocolComponent {
+                // mainnet test
+                id: String::from("0x2A804e94500AE379ee0CcC423a67B07cc0aF548C"),
+                ..Default::default()
+            };
+
+            let token_in = Bytes::from("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"); // USDC
+            let token_out = Bytes::from("0xD31a59c85aE9D8edEFeC411D448f90841571b89c"); // WSOL
+            let swap = SwapBuilder::new(liqp_pool, token_in.clone(), token_out.clone()).build();
+            let encoding_context = EncodingContext {
+                receiver: Bytes::from("0x1D96F2f6BeF1202E4Ce1Ff6Dad0c2CB002861d3e"), // BOB
+                exact_out: false,
+                router_address: Some(Bytes::zero(20)),
+                group_token_in: token_in.clone(),
+                group_token_out: token_out.clone(),
+                transfer_type: TransferType::Transfer,
+                historical_trade: false,
+            };
+            let encoder = LiquidityPartySwapEncoder::new(
+                Bytes::from("0x543778987b293C7E8Cf0722BB2e935ba6f4068D4"), // What is this address? It is used in all the tests in place of the router address
+                Chain::Ethereum,
+                None,
+            )
+                .unwrap();
+            let encoded_swap = encoder
+                .encode_swap(&swap, &encoding_context)
+                .unwrap();
+            let hex_swap = encode(&encoded_swap);
+            assert_eq!(
+                hex_swap,
+                String::from(concat!(
+                // pool address
+                "2a804e94500ae379ee0ccc423a67b07cc0af548c", // MUST BE LOWERCASE
+                // in token address
+                "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // MUST BE LOWERCASE
+                // in token index
+                "01",
+                // out token index
+                "05",
+                // receiver
+                "1d96f2f6bef1202e4ce1ff6dad0c2cb002861d3e", // Bob, MUST BE LOWERCASE
+                // transfer type Transfer
+                "01",
+                ))
+            );
+            write_calldata_to_file("test_encode_liquidityparty", hex_swap.as_str());
         }
     }
 }
