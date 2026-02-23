@@ -20,7 +20,6 @@ import {FluidV1Executor} from "../src/executors/FluidV1Executor.sol";
 import {SlipstreamsExecutor} from "../src/executors/SlipstreamsExecutor.sol";
 import {RocketpoolExecutor} from "../src/executors/RocketpoolExecutor.sol";
 import {ERC4626Executor} from "../src/executors/ERC4626Executor.sol";
-import {LidoExecutor} from "../src/executors/LidoExecutor.sol";
 import {EtherfiExecutor} from "../src/executors/EtherfiExecutor.sol";
 
 // Test utilities and mocks
