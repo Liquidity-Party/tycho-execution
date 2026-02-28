@@ -50,8 +50,8 @@ contract RestrictTransferFrom {
     // Hex enum values are also listed here, because they are used in test cases that check swap encodings.
     enum TransferType {
         TransferFrom, // uint8(0x00)
-        Transfer,     // uint8(0x01)
-        None          // uint8(0x02)
+        Transfer, // uint8(0x01)
+        None // uint8(0x02)
     }
 
     /**
